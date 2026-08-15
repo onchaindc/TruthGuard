@@ -74,6 +74,9 @@ All are optional — sensible defaults point at Bradbury Testnet:
 | `NEXT_PUBLIC_GENLAYER_RPC_URL` | `https://rpc-bradbury.genlayer.com` |
 | `NEXT_PUBLIC_FACTCHECKER_CONTRACT` | `0x6966358267e8e85fD1CAA204F89E8d340b77DBE6` (TruthGuard intelligent contract) |
 | `NEXT_PUBLIC_GENLAYER_EXPLORER` | `https://explorer-bradbury.genlayer.com/` |
+| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | _(empty — WalletConnect QR pairing disabled)_ |
 
-No API keys are needed — evidence fetching and AI analysis run inside the GenLayer
-network itself.
+Only `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` requires setup: create a free project at
+[cloud.walletconnect.com](https://cloud.walletconnect.com) and set it in your hosting
+dashboard to enable QR-code wallet pairing (mobile wallets). Evidence fetching and AI
+analysis run inside the GenLayer network itself — no other API keys are needed.

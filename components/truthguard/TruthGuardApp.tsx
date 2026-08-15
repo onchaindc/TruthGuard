@@ -50,6 +50,11 @@ import {
   requestWalletAccounts,
   walletFromEip6963
 } from "@/lib/wallet";
+import {
+  createWalletConnectProvider,
+  disconnectWalletConnect,
+  isWalletConnectConfigured
+} from "@/lib/walletconnect";
 import { truncateMiddle } from "@/lib/utils";
 
 type Evidence = { id: string; url: string };
@@ -206,7 +211,30 @@ export function TruthGuardApp() {
     }
   }
 
+  async function connectWalletConnect() {
+    setWalletModalOpen(false);
+    try {
+      const provider = await createWalletConnectProvider();
+      const accounts = await requestWalletAccounts(provider);
+      const address = accounts[0];
+      if (!address) throw new Error("WalletConnect did not return an account.");
+
+      const nextChainId = await ensureBradburyNetwork(provider);
+      setWallet(address);
+      setWalletName("WalletConnect");
+      setWalletProvider(provider);
+      setChainId(nextChainId);
+      localStorage.setItem(SELECTED_WALLET_KEY, "walletconnect");
+      notify("Connected via WalletConnect.", "good");
+    } catch (error) {
+      notify(formatContractError(error), "bad");
+    }
+  }
+
   function disconnectWallet() {
+    if (walletProvider) {
+      void disconnectWalletConnect(walletProvider);
+    }
     setWallet("");
     setWalletName("");
     setWalletProvider(null);
@@ -528,8 +556,10 @@ const contractResult = await waitForContractResult({
       {walletModalOpen ? (
         <WalletModal
           wallets={walletOptions}
+          walletConnectAvailable={isWalletConnectConfigured()}
           onClose={() => setWalletModalOpen(false)}
           onSelect={(walletOption) => void connectSelectedWallet(walletOption)}
+          onWalletConnect={() => void connectWalletConnect()}
         />
       ) : null}
     </main>
@@ -698,7 +728,13 @@ function ToastView({ toast }: { toast: NonNullable<Toast> }) {
   );
 }
 
-function WalletModal({ wallets, onClose, onSelect }: { wallets: WalletOption[]; onClose: () => void; onSelect: (wallet: WalletOption) => void }) {
+function WalletModal({ wallets, walletConnectAvailable, onClose, onSelect, onWalletConnect }: {
+  wallets: WalletOption[];
+  walletConnectAvailable: boolean;
+  onClose: () => void;
+  onSelect: (wallet: WalletOption) => void;
+  onWalletConnect: () => void;
+}) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-md">
       <div className="tg-card w-full max-w-md animate-[modalIn_220ms_ease-out] p-6">
@@ -706,7 +742,7 @@ function WalletModal({ wallets, onClose, onSelect }: { wallets: WalletOption[]; 
           <div>
             <p className="text-lg font-bold tracking-tight text-[var(--tg-text)]">Connect a wallet</p>
             <p className="mt-1 text-sm text-[var(--tg-muted)]">
-              {wallets.length} wallet{wallets.length === 1 ? "" : "s"} detected. Pick one to verify claims on Bradbury.
+              Pick a detected wallet, or scan a QR code with your mobile wallet.
             </p>
           </div>
           <IconButton label="Close wallet selector" onClick={onClose}><X size={16} /></IconButton>
@@ -729,9 +765,49 @@ function WalletModal({ wallets, onClose, onSelect }: { wallets: WalletOption[]; 
               <ArrowRight size={15} className="shrink-0 text-[var(--tg-muted)]" />
             </button>
           ))}
+
+          {wallets.length ? (
+            <div className="flex items-center gap-3 py-1">
+              <span className="h-px flex-1 bg-[var(--tg-line)]" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--tg-muted)]">or</span>
+              <span className="h-px flex-1 bg-[var(--tg-line)]" />
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={onWalletConnect}
+            disabled={!walletConnectAvailable}
+            className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] p-3.5 text-left transition hover:border-[var(--tg-accent-line)] hover:bg-[var(--tg-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--tg-accent-line)] bg-[var(--tg-accent-soft)]">
+                <WalletConnectLogo />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-semibold text-[var(--tg-text)]">WalletConnect</span>
+                <span className="block truncate text-xs text-[var(--tg-muted)]">
+                  {walletConnectAvailable ? "Scan a QR code with your mobile wallet" : "Configure NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID to enable"}
+                </span>
+              </span>
+            </span>
+            <ArrowRight size={15} className="shrink-0 text-[var(--tg-muted)]" />
+          </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function WalletConnectLogo() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4.91 7.51c4.76-4.66 12.42-4.66 17.18 0l.57.56c.24.23.24.6 0 .83l-1.96 1.92a.29.29 0 0 1-.41 0l-.79-.77c-3.31-3.24-8.7-3.24-12.01 0l-.84.83a.29.29 0 0 1-.41 0L4.34 8.96a.59.59 0 0 1 0-.83l.57-.62Zm21.22 3.98 1.74 1.71c.24.23.24.6 0 .83l-7.86 7.7a.58.58 0 0 1-.83 0l-5.58-5.47a.15.15 0 0 0-.2 0l-5.58 5.47a.58.58 0 0 1-.83 0l-7.86-7.7a.59.59 0 0 1 0-.83l1.74-1.71c.24-.23.62-.23.86 0l5.58 5.47c.06.05.14.05.2 0l5.58-5.47c.24-.23.62-.23.86 0l5.58 5.47c.06.05.14.05.2 0l5.58-5.47a.59.59 0 0 1 .86 0Z"
+        transform="translate(1.5 0)"
+        fill="#3396FF"
+      />
+    </svg>
   );
 }
 
