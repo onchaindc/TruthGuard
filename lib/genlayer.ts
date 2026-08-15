@@ -11,7 +11,7 @@ import type { Eip1193Provider } from "ethers";
 import type { Address } from "viem";
 export const FACT_CHECKER_CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_FACTCHECKER_CONTRACT ||
-  "0x5bce9473CD61A5A0FF9f13FCE2522efCC00776f8";
+  "0x6966358267e8e85fD1CAA204F89E8d340b77DBE6";
 export const CONTRACT_ADDRESS = FACT_CHECKER_CONTRACT_ADDRESS;
 
 export const GENLAYER_RPC_URL =

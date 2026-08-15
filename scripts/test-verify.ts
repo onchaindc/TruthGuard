@@ -42,7 +42,9 @@ const main = async () => {
 
   const txHash = process.argv[3] as TransactionHash;
   if (!txHash) throw new Error("poll mode needs a tx hash");
-  for (let i = 0; i < 30; i++) {
+  // Bradbury consensus on a web-fetching, LLM-running contract can take
+  // several minutes. Poll up to ~10 minutes before giving up.
+  for (let i = 0; i < 150; i++) {
     await new Promise((r) => setTimeout(r, 4000));
     const t = await client.getTransaction({ hash: txHash });
     const status = t.statusName?.toString();

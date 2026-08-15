@@ -254,7 +254,8 @@ export function TruthGuardApp() {
 const contractResult = await waitForContractResult({
   txHash: contractResponse.txHash,
   contractAddress,
-  expectedClaim: claim.trim()
+  expectedClaim: claim.trim(),
+  onStatus: (status) => setStatus(status)
 });
 
       setStep(2);
@@ -719,18 +720,25 @@ function writeRate(count: number) {
 async function waitForContractResult({
   txHash,
   contractAddress,
-  expectedClaim
+  expectedClaim,
+  onStatus
 }: {
   txHash: string;
   contractAddress: string;
   expectedClaim: string;
+  onStatus?: (status: string) => void;
 }) {
+  // Bradbury consensus on a web-fetching, LLM-running contract can take
+  // several minutes (validators independently fetch the evidence and must
+  // reach equivalence). Poll up to ~8 minutes and only report a failure when
+  // the network actually decided — never when it is still working.
+  const MAX_ATTEMPTS = 190;
   let lastError = "Timed out waiting for Bradbury consensus.";
 
-  for (let attempt = 0; attempt < 60; attempt++) {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
       const tx = await getGenLayerTransactionState(txHash);
-      console.log(`Attempt ${attempt}: Status =`, tx.status);
+      onStatus?.(`Waiting for validator consensus (${Math.round(((attempt + 1) / MAX_ATTEMPTS) * 100)}%) — validators are independently reviewing the evidence...`);
 
       // Accept any finalized state: ACCEPTED, FINALIZED, or failed
       if (tx.status === "ACCEPTED" || tx.status === "FINALIZED" || !tx.pending || tx.failed) {
@@ -739,11 +747,22 @@ async function waitForContractResult({
         }
 
         const result = await readLastResult(contractAddress);
-        console.log("✅ Got result:", result);
-        
-        if (result.verdict && ["true", "false", "uncertain"].includes(result.verdict.toLowerCase())) {
+        const matchesClaim =
+          result.claim?.trim().toLowerCase() === expectedClaim.trim().toLowerCase();
+        const validVerdict =
+          result.verdict && ["true", "false", "uncertain"].includes(result.verdict.toLowerCase());
+
+        if (matchesClaim && validVerdict) {
           return result;
         }
+
+        // The network finalized but the latest recorded result is not ours
+        // (e.g. another verification landed in between). Surface the real
+        // state instead of inventing a result.
+        throw new Error(
+          `Bradbury finalized the transaction, but the contract's latest recorded result does not match this claim. ` +
+            `Track the transaction here: ${genlayerExplorerTxUrl(txHash)}.`
+        );
       }
     } catch (err) {
       if (err instanceof Error) {
@@ -751,10 +770,15 @@ async function waitForContractResult({
       }
     }
 
-    await delay(2000);
+    await delay(2500);
   }
 
-  throw new Error(lastError);
+  // The transaction never finalized. Say exactly that, with a link, instead
+  // of a generic failure.
+  throw new Error(
+    `Bradbury validators are still reviewing this claim — the transaction is pending after several minutes. ` +
+      `You can track it here: ${genlayerExplorerTxUrl(txHash)}.`
+  );
 }
 
 function delay(ms: number) {

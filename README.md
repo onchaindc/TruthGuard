@@ -72,7 +72,7 @@ All are optional — sensible defaults point at Bradbury Testnet:
 | Variable | Default |
 | --- | --- |
 | `NEXT_PUBLIC_GENLAYER_RPC_URL` | `https://rpc-bradbury.genlayer.com` |
-| `NEXT_PUBLIC_FACTCHECKER_CONTRACT` | `0x6a620f3a17334BC1Ab25e31C4C60318f148e800f` (older FactChecker deployment) |
+| `NEXT_PUBLIC_FACTCHECKER_CONTRACT` | `0x6966358267e8e85fD1CAA204F89E8d340b77DBE6` (TruthGuard intelligent contract) |
 | `NEXT_PUBLIC_GENLAYER_EXPLORER` | `https://explorer-bradbury.genlayer.com/` |
 
 No API keys are needed — evidence fetching and AI analysis run inside the GenLayer
