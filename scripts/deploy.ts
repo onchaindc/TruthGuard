@@ -9,7 +9,9 @@ import {
 } from "genlayer-js/types";
 import path from "path";
 
-config();
+// Load both the classic `.env` and a `.env.local` (used by Freebuff's
+// write-only env tool). Later files take precedence for duplicate keys.
+config({ path: [path.join(__dirname, ".env"), path.join(__dirname, ".env.local")] });
 
 const CONTRACT_ENV_KEY = "NEXT_PUBLIC_FACTCHECKER_CONTRACT";
 const ROOT_ENV_LOCAL = path.join(__dirname, "..", ".env.local");
