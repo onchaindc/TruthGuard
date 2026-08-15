@@ -1,3 +1,4 @@
+# v0.2.16
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 """TruthGuard — decentralized AI fact checker for GenLayer Bradbury Testnet.
 
@@ -8,7 +9,7 @@ Every `verify_claim(claim, url)` transaction:
      on the verdict, confidence, and evidence reliability before anything is
      recorded,
   4. stores the agreed result on-chain (verdict, confidence, reasoning,
-     evidence analysis, requester, timestamp).
+     evidence analysis, requester, block number).
 
 Nothing displayed by the frontend is fabricated: the app reads it back with
 `get_last_result()`, which returns exactly what validators agreed on.
@@ -16,13 +17,13 @@ Nothing displayed by the frontend is fabricated: the app reads it back with
 
 import json
 import re
-from datetime import datetime
 
 from genlayer import *
-import genlayer.gl as gl
 
-# Verdicts / flags are stored as plain strings (not enums) because enum
-# payloads are not natively encoded in GenVM storage.
+# Verdicts / flags and all numeric values are stored as plain strings:
+# GenVM persistent storage rejects bare `int` annotations (use bigint/u* or
+# strings), and strings keep the schema portable across runtimes. The
+# frontend parses the numeric strings for display.
 _VERDICT_TRUE = "true"
 _VERDICT_FALSE = "false"
 _VERDICT_UNCERTAIN = "uncertain"
@@ -60,40 +61,44 @@ def _parse_json_dict(json_str: str) -> dict:
         return {}
 
 
-def _to_int(value, fallback: int = 0) -> int:
+def _clamp_score(value) -> str:
+    """Normalize an LLM numeric score (0-100, rounded to the nearest 10)."""
     try:
-        return int(value)
+        score = int(float(value))
     except Exception:
-        return fallback
+        return "0"
+    score = min(100, max(0, score))
+    return str(round(score / 10) * 10)
 
 
 class TruthGuard(gl.Contract):
-    # Persistent storage fields
+    # Persistent storage fields (strings only — see module docstring).
     last_claim: str
     last_url: str
     last_verdict: str
-    last_confidence: int
+    last_confidence: str
     last_reasoning: str
     last_evidence_title: str
     last_evidence_excerpt: str
-    last_evidence_reliability: int
+    last_evidence_reliability: str
     last_evidence_loaded: str
-    last_requester: Address
-    last_verified_at: str
-    checks_count: int
+    last_requester: str
+    last_verified_block: str
+    checks_count: str
 
     def __init__(self):
         self.last_claim = ""
         self.last_url = ""
         self.last_verdict = ""
-        self.last_confidence = 0
+        self.last_confidence = "0"
         self.last_reasoning = ""
         self.last_evidence_title = ""
         self.last_evidence_excerpt = ""
-        self.last_evidence_reliability = 0
+        self.last_evidence_reliability = "0"
         self.last_evidence_loaded = _NO
-        self.last_verified_at = ""
-        self.checks_count = 0
+        self.last_requester = ""
+        self.last_verified_block = ""
+        self.checks_count = "0"
 
     @gl.public.write
     def verify_claim(self, claim: str, url: str = "") -> None:
@@ -116,10 +121,7 @@ class TruthGuard(gl.Contract):
             # independently and runs the analysis prompt.
             web_data = ""
             if url:
-                web_data = (
-                    gl.nondet.web.render(url, mode="text", wait_after_loaded="10s")
-                    or ""
-                )
+                web_data = gl.nondet.web.render(url, mode="text") or ""
 
             evidence_section = (
                 f"<evidence_url>\n{url}\n</evidence_url>\n"
@@ -141,9 +143,6 @@ based on the evidence provided and, if no evidence was submitted, your general k
 {claim}
 </claim>
 {evidence_section}
-<current_date>
-{datetime.now().astimezone()}
-</current_date>
 
 ### Your Task
 1. Read the claim and the evidence.
@@ -181,10 +180,10 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no trail
         result = gl.eq_principle.prompt_comparative(
             evaluate,
             principle=(
-                "The `verdict`, `confidence`, `evidence_reliability`, and "
-                "`evidence_loaded` fields must be exactly the same across all "
-                "validator outputs. The `reasoning`, `evidence_title`, and "
-                "`evidence_excerpt` fields must be similar in substance."
+                "`verdict` and `evidence_loaded` must be exactly the same across all "
+                "validator outputs. `confidence` and `evidence_reliability` may differ "
+                "by at most 10 points. `reasoning`, `evidence_title`, and "
+                "`evidence_excerpt` must be similar in substance."
             ),
         )
 
@@ -193,8 +192,8 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no trail
         if verdict not in (_VERDICT_TRUE, _VERDICT_FALSE, _VERDICT_UNCERTAIN):
             verdict = _VERDICT_UNCERTAIN
 
-        confidence = min(100, max(0, _to_int(parsed.get("confidence"))))
-        reliability = min(100, max(0, _to_int(parsed.get("evidence_reliability"))))
+        confidence = _clamp_score(parsed.get("confidence"))
+        reliability = _clamp_score(parsed.get("evidence_reliability"))
         evidence_loaded = str(parsed.get("evidence_loaded", "")).strip().lower()
         evidence_loaded = _YES if evidence_loaded == _YES else _NO
 
@@ -208,9 +207,9 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no trail
         self.last_evidence_excerpt = str(parsed.get("evidence_excerpt", "")).strip()
         self.last_evidence_reliability = reliability
         self.last_evidence_loaded = evidence_loaded
-        self.last_requester = gl.message.sender_address
-        self.last_verified_at = datetime.now().astimezone().isoformat()
-        self.checks_count += 1
+        self.last_requester = str(gl.message.sender_address.as_hex)
+        self.last_verified_block = str(gl.block.number)
+        self.checks_count = str(int(self.checks_count) + 1)
 
     @gl.public.view
     def get_last_result(self) -> dict:
@@ -224,11 +223,11 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no trail
             "evidence_excerpt": self.last_evidence_excerpt,
             "evidence_reliability": self.last_evidence_reliability,
             "evidence_loaded": self.last_evidence_loaded,
-            "requester": str(self.last_requester),
-            "verified_at": self.last_verified_at,
+            "requester": self.last_requester,
+            "verified_block": self.last_verified_block,
             "checks_count": self.checks_count,
         }
 
     @gl.public.view
-    def get_checks_count(self) -> int:
+    def get_checks_count(self) -> str:
         return self.checks_count

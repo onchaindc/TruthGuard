@@ -10,7 +10,8 @@ import {
 import type { Eip1193Provider } from "ethers";
 import type { Address } from "viem";
 export const FACT_CHECKER_CONTRACT_ADDRESS =
-  process.env.NEXT_PUBLIC_FACTCHECKER_CONTRACT || "0x6a620f3a17334BC1Ab25e31C4C60318f148e800f";
+  process.env.NEXT_PUBLIC_FACTCHECKER_CONTRACT ||
+  "0x5bce9473CD61A5A0FF9f13FCE2522efCC00776f8";
 export const CONTRACT_ADDRESS = FACT_CHECKER_CONTRACT_ADDRESS;
 
 export const GENLAYER_RPC_URL =
@@ -168,31 +169,40 @@ export async function getGenLayerTransactionState(txHash: string): Promise<GenLa
 }
 
 export function formatContractError(error: unknown) {
-  if (error instanceof Error) {
-    const code = (error as Error & { code?: string | number }).code?.toString();
-    const message = collectErrorMessages(error).join(" ");
-    const normalizedMessage = message.toLowerCase();
+  // Wallets and RPC endpoints reject with all kinds of shapes: Error
+  // instances, plain JSON-RPC objects ({ code, message }), or plain strings.
+  // Always extract what we can instead of swallowing it into a generic
+  // "Unable to verify claim." message.
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code)
+      : undefined;
+  const message =
+    collectErrorMessages(error).join(" ") ||
+    (typeof error === "string" ? error : "");
+  const normalizedMessage = message.toLowerCase();
 
-    if (code === "ACTION_REJECTED" || code === "4001" || normalizedMessage.includes("user rejected")) {
-      return "Transaction rejected in wallet.";
-    }
-
-    if (normalizedMessage.includes("revert") || normalizedMessage.includes("finished_with_error")) {
-      return "Bradbury accepted the transaction, but the contract execution reverted. This usually means the contract rejected the input or the deployed method signature differs from the frontend call.";
-    }
-
-    if (/0x[0-9a-f]{80,}/i.test(message)) {
-      return "The wallet or RPC rejected the contract call data. Reconnect your wallet, switch to GenLayer Bradbury, and try again.";
-    }
-
-    if (normalizedMessage.includes("network") || normalizedMessage.includes("rpc")) {
-      return "RPC/network error while contacting Bradbury Testnet. Please retry.";
-    }
-
-    return message || error.message;
+  if (code === "ACTION_REJECTED" || code === "4001" || normalizedMessage.includes("user rejected")) {
+    return "Transaction rejected in wallet.";
   }
 
-  return "Unable to verify claim. Please retry.";
+  if (code === "-32002" || normalizedMessage.includes("already processing") || normalizedMessage.includes("already pending")) {
+    return "A wallet request is already pending. Finish or dismiss the popup in your wallet, then try again.";
+  }
+
+  if (normalizedMessage.includes("revert") || normalizedMessage.includes("finished_with_error")) {
+    return "Bradbury accepted the transaction, but the contract execution reverted. This usually means the contract rejected the input or the deployed method signature differs from the frontend call.";
+  }
+
+  if (/0x[0-9a-f]{80,}/i.test(message)) {
+    return "The wallet or RPC rejected the contract call data. Reconnect your wallet, switch to GenLayer Bradbury, and try again.";
+  }
+
+  if (normalizedMessage.includes("network") || normalizedMessage.includes("rpc")) {
+    return "RPC/network error while contacting Bradbury Testnet. Please retry.";
+  }
+
+  return message || "Unable to verify claim. Please retry.";
 }
 
 function normalizeTransactionHash(value: unknown): string {

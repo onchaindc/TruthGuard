@@ -108,7 +108,21 @@ export async function ensureBradburyNetwork(provider: Eip1193Provider) {
     });
   }
 
-  return getWalletChainId(provider);
+  // Wallets (MetaMask especially) resolve wallet_addEthereumChain before the
+  // network is actually active. Poll until Bradbury is the active chain, then
+  // give a clear, actionable error instead of silently proceeding on the
+  // wrong network.
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const nextChainId = await getWalletChainId(provider);
+    if (nextChainId.toLowerCase() === BRADBURY_CHAIN_ID_HEX) {
+      return nextChainId;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+
+  throw new Error(
+    "Could not switch your wallet to the GenLayer Bradbury network. Approve the network switch in your wallet and try again."
+  );
 }
 
 export function formatChainLabel(chainId: string) {

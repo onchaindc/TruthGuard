@@ -9,9 +9,16 @@ import {
 } from "genlayer-js/types";
 import path from "path";
 
-// Load both the classic `.env` and a `.env.local` (used by Freebuff's
-// write-only env tool). Later files take precedence for duplicate keys.
-config({ path: [path.join(__dirname, ".env"), path.join(__dirname, ".env.local")] });
+// Load the classic `.env`, the local `.env.local`, and the repo-root
+// `.env.local` (used by Freebuff's write-only env tool). Later files take
+// precedence for duplicate keys.
+config({
+  path: [
+    path.join(__dirname, ".env"),
+    path.join(__dirname, ".env.local"),
+    path.join(__dirname, "..", ".env.local")
+  ]
+});
 
 const CONTRACT_ENV_KEY = "NEXT_PUBLIC_FACTCHECKER_CONTRACT";
 const ROOT_ENV_LOCAL = path.join(__dirname, "..", ".env.local");
@@ -27,10 +34,22 @@ const client = createClient({
   account
 });
 
+function safeJson(value: unknown): string {
+  return JSON.stringify(value, (_key, nested) =>
+    typeof nested === "bigint" ? nested.toString() : nested
+  );
+}
+
 function checkReceiptSuccess(receipt: GenLayerTransaction, context = "Transaction"): void {
   const leader = receipt.consensus_data?.leader_receipt?.[0];
-  if (leader?.execution_result !== "SUCCESS") {
-    throw new Error(`${context} failed. Receipt: ${JSON.stringify(receipt)}`);
+  const result = leader?.execution_result;
+  // A missing leader receipt is not necessarily a failure (shapes vary); the
+  // post-deploy read of get_checks_count() is the real proof. An explicit
+  // failure status is.
+  if (result && result.toUpperCase() !== "SUCCESS") {
+    throw new Error(
+      `${context} failed (${result}). Receipt: ${safeJson(receipt).slice(0, 2000)}`
+    );
   }
 }
 
@@ -99,11 +118,23 @@ const main = async () => {
     }
   }
 
-  const contractCode = readContract("TruthGuard.py");
-  const deployTxHash = (await client.deployContract({
-    code: contractCode,
-    args: []
-  })) as TransactionHash;
+  // CONTRACT_FILE lets us probe alternate contract sources (e.g. a minimal
+  // probe) without touching the real contract. PERSIST_ADDRESS=0 skips the
+  // app .env.local update for probe runs.
+  const contractFilename = process.env.CONTRACT_FILE || "TruthGuard.py";
+  const persistAddress = process.env.PERSIST_ADDRESS !== "0";
+  const deployArgs = process.env.CONTRACT_ARGS ? JSON.parse(process.env.CONTRACT_ARGS) : [];
+  const contractCode = readContract(contractFilename);
+  // Resume support: if DEPLOY_TX_HASH is set, reuse the already-submitted
+  // deployment tx (e.g. after a previous run crashed) instead of deploying a
+  // second instance and spending gas twice.
+  const existingTxHash = process.env.DEPLOY_TX_HASH;
+  const deployTxHash = existingTxHash
+    ? (existingTxHash as TransactionHash)
+    : ((await client.deployContract({
+        code: contractCode,
+        args: deployArgs
+      })) as TransactionHash);
   console.log("Deploy tx hash:", deployTxHash);
 
   const receipt = await client.waitForTransactionReceipt({
@@ -116,8 +147,12 @@ const main = async () => {
   const address = extractContractAddress(receipt);
   console.log(`Deployed TruthGuard to: ${address}`);
 
-  upsertEnvKey(ROOT_ENV_LOCAL, CONTRACT_ENV_KEY, address);
-  console.log(`Wrote ${CONTRACT_ENV_KEY}=${address} → ${ROOT_ENV_LOCAL}`);
+  if (persistAddress) {
+    upsertEnvKey(ROOT_ENV_LOCAL, CONTRACT_ENV_KEY, address);
+    console.log(`Wrote ${CONTRACT_ENV_KEY}=${address} → ${ROOT_ENV_LOCAL}`);
+  } else {
+    console.log(`(Skipped writing ${CONTRACT_ENV_KEY} — probe run.)`);
+  }
 
   await verifyContract(address);
 
