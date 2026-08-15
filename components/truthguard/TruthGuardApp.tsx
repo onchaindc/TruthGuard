@@ -341,8 +341,8 @@ const contractResult = await waitForContractResult({
                 </p>
               </div>
               <Card>
-                <p className="font-bold text-white">Trust signals</p>
-                {["Powered by GenLayer Bradbury Testnet", "Decentralized AI Consensus", "5 validators participated"].map((signal) => (
+                <p className="font-bold text-white">How it works</p>
+                {["Evidence fetched via the GenLayer web oracle", "AI analysis with validator consensus", "Verdict & reasoning stored on-chain"].map((signal) => (
                   <div key={signal} className="mt-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-[var(--tg-muted)]">
                     {signal}
                   </div>
@@ -496,12 +496,22 @@ function Result({ item, advanced, setAdvanced, copy, share, reset }: {
     <Card className="animate-[verdictReveal_420ms_ease-out]">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem]">
         <div>
-          <Badge><CheckCircle2 size={14} /> {item.validators} validators participated</Badge>
+          <Badge><CheckCircle2 size={14} /> Consensus reached by GenLayer validators</Badge>
           <h3 className={`mt-3 text-5xl font-black uppercase ${verdictClass(item.verdict)}`}>{label(item.verdict)}</h3>
           <p className="mt-3 text-sm leading-6 text-slate-200">{item.explanation}</p>
-          <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-950/70">
-            <div className={item.verdict === "true" ? "h-full bg-emerald-300" : item.verdict === "false" ? "h-full bg-rose-300" : "h-full bg-amber-300"} style={{ width: `${item.confidence}%` }} />
-          </div>
+          {item.confidence !== undefined ? (
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs text-[var(--tg-muted)]">
+                <span>On-chain consensus confidence</span>
+                <span className="font-bold text-white">{item.confidence}%</span>
+              </div>
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-950/70">
+                <div className={item.verdict === "true" ? "h-full bg-emerald-300" : item.verdict === "false" ? "h-full bg-rose-300" : "h-full bg-amber-300"} style={{ width: `${item.confidence}%` }} />
+              </div>
+            </div>
+          ) : (
+            <p className="mt-4 text-xs text-[var(--tg-muted)]">Confidence was not recorded by this contract.</p>
+          )}
           <a href={genlayerExplorerTxUrl(item.txHash)} target="_blank" className="mt-4 inline-flex items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-xs text-slate-200">
             {truncateMiddle(item.txHash, 10, 8)} <ExternalLink size={14} />
           </a>
@@ -517,10 +527,12 @@ function Result({ item, advanced, setAdvanced, copy, share, reset }: {
         {item.evidence.map((source) => (
           <a key={source.url} href={source.url} target="_blank" className="block rounded-lg border border-white/10 bg-white/5 p-4 hover:bg-cyan-300/10">
             <div className="flex justify-between gap-3">
-              <b className="truncate text-white">{source.title}</b>
-              <span className="text-xs text-cyan-100">{source.reliability}% reliable</span>
+              <b className="truncate text-white">{source.title || source.url}</b>
+              {source.reliability !== undefined ? (
+                <span className="text-xs text-cyan-100">{source.reliability}% reliable</span>
+              ) : null}
             </div>
-            <p className="mt-2 text-sm text-[var(--tg-muted)]">{source.excerpt}</p>
+            {source.excerpt ? <p className="mt-2 text-sm text-[var(--tg-muted)]">{source.excerpt}</p> : null}
           </a>
         ))}
       </div>
@@ -548,7 +560,7 @@ function HistoryPanel({ history, setHistory, setClaim, setResult }: {
         <div className="space-y-2">
           {history.map((item) => (
             <button key={item.id} onClick={() => { setResult(item); setClaim(item.claim); }} className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-left hover:bg-cyan-300/10">
-              <div className="flex justify-between text-xs"><b className={verdictClass(item.verdict)}>{label(item.verdict)}</b><span>{item.confidence}%</span></div>
+              <div className="flex justify-between text-xs"><b className={verdictClass(item.verdict)}>{label(item.verdict)}</b><span>{item.confidence !== undefined ? `${item.confidence}%` : "—"}</span></div>
               <p className="mt-2 line-clamp-2 text-sm font-bold text-white">{item.claim}</p>
             </button>
           ))}

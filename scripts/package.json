@@ -1,0 +1,19 @@
+{
+  "name": "truthguard-deploy",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Deployment script for the TruthGuard intelligent contract (genlayer-js).",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "genlayer-js": "^1.1.8"
+  },
+  "scripts": {
+    "deploy": "tsx deploy.ts"
+  }
+}

@@ -18,6 +18,10 @@ export const GENLAYER_RPC_URL =
   process.env.NEXT_PUBLIC_GENLAYER_NETWORK ||
   "https://rpc-bradbury.genlayer.com";
 
+// Reference ABI for the TruthGuard intelligent contract (see
+// intelligent-contracts/TruthGuard.py). genlayer-js builds calldata from
+// functionName + args, so this is documentation + typing rather than a passed
+// artifact.
 export const FACT_CHECKER_ABI = [
   {
     name: "verify_claim",
@@ -34,18 +38,40 @@ export const FACT_CHECKER_ABI = [
     type: "function",
     stateMutability: "view",
     inputs: [],
-    outputs: [
-      { name: "claim", type: "string" },
-      { name: "verdict", type: "string" },
-      { name: "reason", type: "string" }
-    ]
+    outputs: []
+  },
+  {
+    name: "get_checks_count",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: []
   }
 ] as const;
 
+/**
+ * Result of `get_last_result()` on the TruthGuard intelligent contract.
+ * Every field comes from on-chain consensus — nothing is inferred client-side.
+ *
+ * Older deployments of the first FactChecker contract return only
+ * [claim, verdict, reason]; `normalizeFactCheckerResult` maps those onto the
+ * same shape with the richer fields left undefined.
+ */
 export type FactCheckerResult = {
   claim: string;
   verdict: string;
-  reason: string;
+  /** `reason` is the legacy key; the new contract stores `reasoning`. */
+  reason?: string;
+  reasoning?: string;
+  url?: string;
+  confidence?: number;
+  evidenceTitle?: string;
+  evidenceExcerpt?: string;
+  evidenceReliability?: number;
+  evidenceLoaded?: boolean;
+  requester?: string;
+  verifiedAt?: string;
+  checksCount?: number;
 };
 
 export type VerifyClaimResponse = {
@@ -199,6 +225,7 @@ function normalizeTransactionHash(value: unknown): string {
 
 function normalizeFactCheckerResult(result: unknown): FactCheckerResult {
   if (Array.isArray(result)) {
+    // Legacy contract shape: [claim, verdict, reason]
     return {
       claim: stringifyValue(result[0]),
       verdict: stringifyValue(result[1]),
@@ -207,23 +234,56 @@ function normalizeFactCheckerResult(result: unknown): FactCheckerResult {
   }
 
   if (result instanceof Map) {
-    return {
-      claim: stringifyValue(result.get("claim") ?? result.get(0)),
-      verdict: stringifyValue(result.get("verdict") ?? result.get(1)),
-      reason: stringifyValue(result.get("reason") ?? result.get(2))
-    };
+    return normalizeFactCheckerResult(Object.fromEntries(result.entries()));
   }
 
   if (result && typeof result === "object") {
-    const objectResult = result as Record<string, unknown>;
+    const record = result as Record<string, unknown>;
+    const claim = stringifyValue(record.claim) || stringifyValue(record[0]);
+    const verdict = stringifyValue(record.verdict) || stringifyValue(record[1]);
+
+    if (!claim && !verdict) {
+      throw new Error("Bradbury returned an unexpected fact-check result.");
+    }
+
+    const evidenceLoaded = record.evidence_loaded;
+
     return {
-      claim: stringifyValue(objectResult.claim ?? objectResult[0]),
-      verdict: stringifyValue(objectResult.verdict ?? objectResult[1]),
-      reason: stringifyValue(objectResult.reason ?? objectResult[2])
+      claim,
+      verdict,
+      reason: optionalString(record.reason),
+      reasoning: optionalString(record.reasoning),
+      url: optionalString(record.url),
+      confidence: optionalNumber(record.confidence),
+      evidenceTitle: optionalString(record.evidence_title),
+      evidenceExcerpt: optionalString(record.evidence_excerpt),
+      evidenceReliability: optionalNumber(record.evidence_reliability),
+      evidenceLoaded:
+        evidenceLoaded === true ||
+        (typeof evidenceLoaded === "string" && evidenceLoaded.toLowerCase() === "true"),
+      requester: optionalString(record.requester),
+      verifiedAt: optionalString(record.verified_at),
+      checksCount: optionalNumber(record.checks_count)
     };
   }
 
   throw new Error("Bradbury returned an unexpected fact-check result.");
+}
+
+function optionalString(value: unknown) {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  const stringified = stringifyValue(value).trim();
+  return stringified ? stringified : undefined;
+}
+
+function optionalNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return undefined;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
 }
 
 function stringifyValue(value: unknown) {
