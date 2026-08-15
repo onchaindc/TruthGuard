@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowRight,
   Check,
   CheckCircle2,
   Copy,
-  ExternalLink as ExternalLinkIcon,
   ExternalLink,
   Gauge,
   History,
@@ -93,6 +93,7 @@ export function TruthGuardApp() {
   const invalidUrls = evidence.filter((item) => item.url.trim() && !isValidUrl(item.url.trim())).length;
   const canVerify = claim.trim().length >= 12 && invalidUrls === 0 && !busy;
   const evidenceUrl = urls[0] || "";
+  const checksRemaining = Math.max(0, RATE_LIMIT - rate);
 
   useEffect(() => {
     document.documentElement.classList.toggle("theme-light", theme === "light");
@@ -162,7 +163,7 @@ export function TruthGuardApp() {
 
   useEffect(() => {
     if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 3000);
+    const timer = window.setTimeout(() => setToast(null), 3500);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -274,7 +275,7 @@ const contractResult = await waitForContractResult({
       setRate(readRate());
       setStatus("Consensus complete.");
       notify("Verification complete.", "good");
-      if (next.verdict !== "uncertain") confetti(next.verdict === "true" ? ["#5eead4", "#34d399"] : ["#fb7185", "#fda4af"]);
+      if (next.verdict !== "uncertain") confetti(next.verdict === "true" ? ["#34d399", "#2dd4bf"] : ["#fb7185", "#fda4af"]);
     } catch (error) {
       setStatus("Verification failed.");
       notify(formatContractError(error), "bad");
@@ -295,97 +296,123 @@ const contractResult = await waitForContractResult({
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[var(--tg-bg)] text-[var(--tg-text)]">
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(34,211,238,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.08)_1px,transparent_1px)] bg-[size:44px_44px] opacity-40" />
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_50%_0%,rgba(16,185,129,.22),transparent_58%)]" />
+      {/* Ambient background */}
+      <div aria-hidden className="pointer-events-none fixed inset-0" style={{ background: "var(--tg-glow)" }} />
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 opacity-60"
+        style={{
+          backgroundImage:
+            "linear-gradient(var(--tg-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--tg-grid-line) 1px, transparent 1px)",
+          backgroundSize: "44px 44px",
+          maskImage: "radial-gradient(80% 60% at 50% 0%, black, transparent)",
+          WebkitMaskImage: "radial-gradient(80% 60% at 50% 0%, black, transparent)"
+        }}
+      />
       {toast ? <ToastView toast={toast} /> : null}
       {busy ? <Progress step={step} status={status} /> : null}
 
-      <div className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-4 py-4 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-5 sm:px-6 lg:px-8">
+        {/* Header */}
+        <header className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/10 text-cyan-200">
-              <ShieldCheck size={22} />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--tg-accent-line)] bg-[var(--tg-accent-soft)] text-[var(--tg-accent)]">
+              <ShieldCheck size={20} strokeWidth={2.2} />
             </div>
-            <div>
-              <p className="text-xs font-black uppercase tracking-[.22em] text-cyan-200">TruthGuard</p>
-              <h1 className="text-lg font-black text-white">AI Fact Checker on GenLayer Bradbury</h1>
+            <div className="leading-tight">
+              <p className="text-[15px] font-extrabold tracking-tight text-[var(--tg-text)]">TruthGuard</p>
+              <p className="text-xs text-[var(--tg-muted)]">Decentralized fact-checking</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <IconButton label="Toggle theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-              {theme === "dark" ? <Moon size={17} /> : <Sun size={17} />}
-            </IconButton>
-            <Button onClick={() => void connectWallet()}>
-              <Wallet size={17} />
-              {wallet ? truncateMiddle(wallet) : "Connect Wallet"}
-            </Button>
+
+          <div className="flex items-center gap-2">
             {wallet ? (
-              <Button variant="muted" onClick={disconnectWallet}>
+              <span className={`tg-chip ${chainId.toLowerCase() === BRADBURY_CHAIN_ID_HEX ? "text-[var(--tg-true)]" : "text-[var(--tg-uncertain)]"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${chainId.toLowerCase() === BRADBURY_CHAIN_ID_HEX ? "bg-[var(--tg-true)]" : "bg-[var(--tg-uncertain)]"}`} />
+                {formatChainLabel(chainId)}
+              </span>
+            ) : null}
+            <IconButton label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"} onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+              {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+            </IconButton>
+            {wallet ? (
+              <Button variant="ghost" onClick={disconnectWallet}>
                 Disconnect
               </Button>
             ) : null}
+            <Button onClick={() => void connectWallet()}>
+              <Wallet size={16} />
+              {wallet ? truncateMiddle(wallet) : "Connect Wallet"}
+            </Button>
           </div>
         </header>
 
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_23rem]">
-          <div className="space-y-6">
-            <section className="grid gap-5 py-4 md:grid-cols-[minmax(0,1fr)_18rem] md:items-end">
-              <div>
-                <Badge>
-                  <Sparkles size={14} /> Powered by decentralized AI consensus
-                </Badge>
-                <h2 className="mt-4 max-w-4xl text-4xl font-black leading-[1.02] text-white sm:text-5xl lg:text-6xl">
-                  Verify Any Claim with Decentralized AI Consensus
-                </h2>
-                <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--tg-muted)] sm:text-lg">
-                  Submit a claim, attach evidence, and let GenLayer-style intelligent contracts coordinate independent AI validators on Bradbury Testnet.
-                </p>
-              </div>
-              <Card>
-                <p className="font-bold text-white">How it works</p>
-                {["Evidence fetched via the GenLayer web oracle", "AI analysis with validator consensus", "Verdict & reasoning stored on-chain"].map((signal) => (
-                  <div key={signal} className="mt-2 rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-[var(--tg-muted)]">
-                    {signal}
-                  </div>
-                ))}
-              </Card>
-            </section>
+        {/* Hero */}
+        <section className="py-12 sm:py-16">
+          <div className="max-w-2xl animate-[fadeUp_500ms_ease-out]">
+            <span className="tg-chip mb-5 border-[var(--tg-accent-line)] text-[var(--tg-accent)]">
+              <Sparkles size={12} /> GenLayer intelligent contracts · Bradbury Testnet
+            </span>
+            <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight text-[var(--tg-text)] sm:text-5xl">
+              Verify any claim with{" "}
+              <span className="text-[var(--tg-accent)]">decentralized AI consensus.</span>
+            </h1>
+            <p className="mt-4 max-w-xl text-base leading-7 text-[var(--tg-text-soft)] sm:text-lg">
+              Submit a claim, attach evidence, and let independent AI validators fetch the sources,
+              analyze them, and agree before a verdict is recorded on-chain. No browser-side guesswork — ever.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              {["Evidence fetched on-chain", "Validators must agree", "Verdict stored immutably"].map((signal) => (
+                <span key={signal} className="tg-chip">
+                  <Check size={12} className="text-[var(--tg-accent)]" /> {signal}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
 
-            <Card>
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        {/* Main grid */}
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
+          <div className="space-y-6">
+            {/* Claim checker */}
+            <div className="tg-card p-5 sm:p-6">
+              <div className="mb-5 flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-bold text-cyan-100">Claim checker</p>
-                  <p className="mt-1 text-sm text-[var(--tg-muted)]">Press Cmd/Ctrl + Enter from anywhere to verify.</p>
+                  <h2 className="text-lg font-bold tracking-tight text-[var(--tg-text)]">New verification</h2>
+                  <p className="mt-0.5 text-sm text-[var(--tg-muted)]">Tip: press <kbd className="rounded border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] px-1.5 py-0.5 font-sans text-[11px] text-[var(--tg-text-soft)]">⌘/Ctrl</kbd> + <kbd className="rounded border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] px-1.5 py-0.5 font-sans text-[11px] text-[var(--tg-text-soft)]">Enter</kbd> to verify.</p>
                 </div>
-                <Badge>
-                  <Gauge size={14} /> {Math.max(0, RATE_LIMIT - rate)}/{RATE_LIMIT} checks left this hour
-                </Badge>
+                <span className="tg-chip shrink-0">
+                  <Gauge size={13} className="text-[var(--tg-accent)]" />
+                  {checksRemaining} checks left this hour
+                </span>
               </div>
 
               <textarea
-                className="min-h-40 w-full resize-none rounded-lg border border-white/10 bg-slate-950/60 px-4 py-3 text-base leading-7 text-white outline-none focus:border-cyan-300"
+                className="min-h-40 w-full resize-none rounded-xl border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] px-4 py-3.5 text-[15px] leading-7 text-[var(--tg-text)] outline-none transition placeholder:text-[var(--tg-muted)] focus:border-[var(--tg-accent-line)]"
                 value={claim}
                 maxLength={MAX}
                 onChange={(event) => setClaim(event.target.value)}
                 placeholder="Paste a claim, headline, product promise, crypto news item, health statement, or public quote..."
               />
               <div className="mt-2 flex justify-between text-xs text-[var(--tg-muted)]">
-                <span>{claim.trim().length < 12 ? "Minimum 12 characters." : "Ready for validator review."}</span>
-                <span>
+                <span className={claim.trim().length >= 12 ? "text-[var(--tg-text-soft)]" : ""}>
+                  {claim.trim().length < 12 ? "Minimum 12 characters." : "Ready for validator review."}
+                </span>
+                <span className="tabular-nums">
                   {claim.length}/{MAX}
                 </span>
               </div>
 
-              <div className="mt-5 flex items-center justify-between">
-                <p className="text-sm font-bold text-white">Evidence URL</p>
-                <span className="text-xs font-semibold text-[var(--tg-muted)]">Optional</span>
+              <div className="mt-6 flex items-center justify-between">
+                <p className="text-sm font-semibold text-[var(--tg-text)]">Evidence URL</p>
+                <span className="tg-chip">Optional</span>
               </div>
 
               <div className="mt-3 space-y-3">
                 {evidence.map((item, index) => (
-                  <div key={item.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_2.5rem]">
+                  <div key={item.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_2.75rem]">
                     <input
-                      className="h-11 rounded-md border border-white/10 bg-slate-950/60 px-3 text-sm text-white outline-none focus:border-cyan-300"
+                      className="h-11 w-full rounded-xl border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] px-3.5 text-sm text-[var(--tg-text)] outline-none transition placeholder:text-[var(--tg-muted)] focus:border-[var(--tg-accent-line)]"
                       value={item.url}
                       onChange={(event) => setEvidence((items) => items.map((x) => (x.id === item.id ? { ...x, url: event.target.value } : x)))}
                       placeholder={index === 0 ? "https://source.example/article" : "Add another source URL"}
@@ -401,24 +428,33 @@ const contractResult = await waitForContractResult({
                 ))}
               </div>
 
-              <div className="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+              <div className="mt-6 border-t border-[var(--tg-line)] pt-5">
+                <p className="tg-label mb-3">Try an example</p>
                 <div className="flex flex-wrap gap-2">
                   {exampleClaims.map((example) => (
                     <button
                       key={example}
                       onClick={() => setClaim(example)}
-                      className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-cyan-300/10"
+                      className="rounded-lg border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] px-3 py-2 text-left text-xs font-medium text-[var(--tg-text-soft)] transition hover:border-[var(--tg-accent-line)] hover:text-[var(--tg-text)]"
                     >
                       {example.length > 54 ? `${example.slice(0, 54)}...` : example}
                     </button>
                   ))}
                 </div>
-                <Button big disabled={!canVerify} onClick={() => void verify()}>
-                  <SearchCheck size={19} /> Verify with AI Consensus
-                </Button>
               </div>
-            </Card>
 
+              <Button
+                big
+                className="mt-6 w-full"
+                disabled={!canVerify}
+                onClick={() => void verify()}
+              >
+                <SearchCheck size={18} /> Verify with AI Consensus
+                <ArrowRight size={17} className="ml-1 opacity-70" />
+              </Button>
+            </div>
+
+            {/* Result */}
             {result ? (
               <Result item={result} advanced={advanced} setAdvanced={setAdvanced} copy={copy} share={share} reset={() => {
                 setClaim("");
@@ -426,53 +462,68 @@ const contractResult = await waitForContractResult({
                 setResult(null);
               }} />
             ) : (
-              <Card><div className="h-24 animate-pulse rounded-lg bg-white/10" /></Card>
+              <div className="tg-card p-6">
+                <div className="h-24 animate-pulse rounded-lg bg-[var(--tg-surface-raised)]" />
+              </div>
             )}
           </div>
 
+          {/* Sidebar */}
           <aside className="space-y-6">
-            <Card>
-              <p className="font-bold text-white">Contract</p>
-              <p className="mt-1 text-xs text-[var(--tg-muted)]">Use the deployed FactChecker or paste another address.</p>
-              <input className="mt-4 h-11 w-full rounded-md border border-white/10 bg-slate-950/60 px-3 font-mono text-xs text-white outline-none" value={contractAddress} onChange={(event) => setContractAddress(event.target.value)} />
-            </Card>
-            <Card>
-              <p className="flex items-center gap-2 font-bold text-white"><Settings size={17} /> Settings</p>
+            <div className="tg-card p-5">
+              <p className="flex items-center gap-2 font-bold tracking-tight text-[var(--tg-text)]">
+                <Settings size={16} className="text-[var(--tg-accent)]" /> Session
+              </p>
               <div className="mt-4 space-y-2 text-sm">
-                <div className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] px-3 py-2.5">
                   <span className="text-[var(--tg-muted)]">Wallet</span>
-                  <span className="font-bold text-white">{walletName || "Not connected"}</span>
+                  <span className="font-semibold text-[var(--tg-text)]">{walletName || "Not connected"}</span>
                 </div>
-                <div className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/5 px-3 py-2">
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] px-3 py-2.5">
                   <span className="text-[var(--tg-muted)]">Network</span>
-                  <span className={`font-bold ${chainId.toLowerCase() === BRADBURY_CHAIN_ID_HEX ? "text-emerald-200" : "text-amber-200"}`}>
+                  <span className={`font-semibold ${chainId.toLowerCase() === BRADBURY_CHAIN_ID_HEX ? "text-[var(--tg-true)]" : "text-[var(--tg-uncertain)]"}`}>
                     {formatChainLabel(chainId)}
                   </span>
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button variant="muted" onClick={() => void switchToBradbury()}>
-                  <PlugZap size={16} /> Switch Bradbury
+                <Button variant="ghost" onClick={() => void switchToBradbury()}>
+                  <PlugZap size={15} /> Switch to Bradbury
                 </Button>
-                <Button variant="muted" onClick={disconnectWallet}>
-                  Clear Session
+                <Button variant="ghost" onClick={disconnectWallet}>
+                  Clear session
                 </Button>
               </div>
-            </Card>
+            </div>
+
+            <div className="tg-card p-5">
+              <p className="font-bold tracking-tight text-[var(--tg-text)]">Contract</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--tg-muted)]">
+                Live TruthGuard deployment on Bradbury. Paste another address to point the app elsewhere.
+              </p>
+              <input
+                className="mt-4 h-11 w-full rounded-xl border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] px-3 font-mono text-xs text-[var(--tg-text)] outline-none transition focus:border-[var(--tg-accent-line)]"
+                value={contractAddress}
+                onChange={(event) => setContractAddress(event.target.value)}
+              />
+            </div>
+
             <HistoryPanel history={history} setHistory={setHistory} setClaim={setClaim} setResult={setResult} />
           </aside>
         </section>
 
-        <footer className="flex flex-col gap-3 border-t border-white/10 py-6 text-sm text-[var(--tg-muted)] md:flex-row md:items-center md:justify-between">
-          <span>TruthGuard verifies claims with decentralized AI consensus.</span>
-          <div className="flex flex-wrap gap-3">
-            <a href="https://docs.genlayer.com" target="_blank" className="hover:text-white">Docs</a>
-            <a href="https://explorer.genlayer.com" target="_blank" className="hover:text-white">GenLayer Explorer</a>
-            <a href="https://github.com/genlayerlabs" target="_blank" className="hover:text-white">GitHub</a>
-            <a href="https://docs.genlayer.com/developers/testnet" target="_blank" className="hover:text-white">Built for Bradbury Testnet</a>
+        {/* Footer */}
+        <footer className="mt-12 flex flex-col gap-4 border-t border-[var(--tg-line)] py-8 text-sm text-[var(--tg-muted)] md:flex-row md:items-center md:justify-between">
+          <span>TruthGuard · Decentralized AI fact-checking on GenLayer Bradbury Testnet.</span>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <a href="https://docs.genlayer.com" target="_blank" className="transition hover:text-[var(--tg-text)]">Docs</a>
+            <a href="https://explorer-bradbury.genlayer.com" target="_blank" className="transition hover:text-[var(--tg-text)]">Explorer</a>
+            <a href="https://github.com/genlayerlabs" target="_blank" className="transition hover:text-[var(--tg-text)]">GitHub</a>
+            <a href="https://docs.genlayer.com/developers/testnet" target="_blank" className="transition hover:text-[var(--tg-text)]">Built for Bradbury Testnet</a>
           </div>
         </footer>
       </div>
+
       <AuthorCorner />
       {walletModalOpen ? (
         <WalletModal
@@ -494,54 +545,64 @@ function Result({ item, advanced, setAdvanced, copy, share, reset }: {
   reset: () => void;
 }) {
   return (
-    <Card className="animate-[verdictReveal_420ms_ease-out]">
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem]">
+    <div className="tg-card animate-[verdictReveal_420ms_ease-out] p-5 sm:p-6">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
         <div>
-          <Badge><CheckCircle2 size={14} /> Consensus reached by GenLayer validators</Badge>
-          <h3 className={`mt-3 text-5xl font-black uppercase ${verdictClass(item.verdict)}`}>{label(item.verdict)}</h3>
-          <p className="mt-3 text-sm leading-6 text-slate-200">{item.explanation}</p>
+          <span className="tg-chip mb-3 border-[var(--tg-accent-line)] text-[var(--tg-accent)]">
+            <CheckCircle2 size={13} /> Consensus reached on-chain
+          </span>
+          <h3 className={`text-4xl font-extrabold uppercase tracking-tight ${verdictTextClass(item.verdict)}`}>{label(item.verdict)}</h3>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--tg-text-soft)]">{item.explanation}</p>
+
           {item.confidence !== undefined ? (
-            <div className="mt-4">
+            <div className="mt-5 max-w-md">
               <div className="flex items-center justify-between text-xs text-[var(--tg-muted)]">
-                <span>On-chain consensus confidence</span>
-                <span className="font-bold text-white">{item.confidence}%</span>
+                <span>Consensus confidence</span>
+                <span className="font-bold text-[var(--tg-text)]">{item.confidence}%</span>
               </div>
-              <div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-950/70">
-                <div className={item.verdict === "true" ? "h-full bg-emerald-300" : item.verdict === "false" ? "h-full bg-rose-300" : "h-full bg-amber-300"} style={{ width: `${item.confidence}%` }} />
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--tg-surface-raised)]">
+                <div className={`h-full rounded-full ${verdictBarClass(item.verdict)}`} style={{ width: `${item.confidence}%` }} />
               </div>
             </div>
           ) : (
             <p className="mt-4 text-xs text-[var(--tg-muted)]">Confidence was not recorded by this contract.</p>
           )}
-          <a href={genlayerExplorerTxUrl(item.txHash)} target="_blank" className="mt-4 inline-flex items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-xs text-slate-200">
-            {truncateMiddle(item.txHash, 10, 8)} <ExternalLink size={14} />
+
+          <a href={genlayerExplorerTxUrl(item.txHash)} target="_blank" className="mt-5 inline-flex items-center gap-2 rounded-lg border border-[var(--tg-line)] px-3 py-2 text-xs font-medium text-[var(--tg-text-soft)] transition hover:border-[var(--tg-accent-line)] hover:text-[var(--tg-text)]">
+            {truncateMiddle(item.txHash, 10, 8)} <ExternalLink size={13} />
           </a>
         </div>
-        <div className="space-y-2">
-          <Button onClick={() => void share(item)}><Share2 size={16} /> Share Result</Button>
-          <Button onClick={() => void copy(item.claim, "Claim")}><Copy size={16} /> Copy Claim</Button>
-          <Button onClick={() => void copy(JSON.stringify(item, null, 2), "Full result")}><Copy size={16} /> Copy Full Result</Button>
-          <Button onClick={reset}><RefreshCw size={16} /> Verify Another Claim</Button>
+        <div className="flex flex-row flex-wrap gap-2 lg:flex-col lg:items-stretch">
+          <Button onClick={() => void share(item)}><Share2 size={15} /> Share result</Button>
+          <Button variant="ghost" onClick={() => void copy(item.claim, "Claim")}><Copy size={15} /> Copy claim</Button>
+          <Button variant="ghost" onClick={() => void copy(JSON.stringify(item, null, 2), "Full result")}><Copy size={15} /> Copy JSON</Button>
+          <Button variant="ghost" onClick={reset}><RefreshCw size={15} /> New check</Button>
         </div>
       </div>
-      <div className="mt-5 space-y-3">
-        {item.evidence.map((source) => (
-          <a key={source.url} href={source.url} target="_blank" className="block rounded-lg border border-white/10 bg-white/5 p-4 hover:bg-cyan-300/10">
-            <div className="flex justify-between gap-3">
-              <b className="truncate text-white">{source.title || source.url}</b>
-              {source.reliability !== undefined ? (
-                <span className="text-xs text-cyan-100">{source.reliability}% reliable</span>
-              ) : null}
-            </div>
-            {source.excerpt ? <p className="mt-2 text-sm text-[var(--tg-muted)]">{source.excerpt}</p> : null}
-          </a>
-        ))}
-      </div>
-      <button className="mt-5 flex w-full items-center justify-between border-t border-white/10 pt-4 text-sm font-bold text-slate-200" onClick={() => setAdvanced(!advanced)}>
-        Advanced raw contract response
+
+      {item.evidence.length ? (
+        <div className="mt-6 space-y-3 border-t border-[var(--tg-line)] pt-5">
+          <p className="tg-label">Evidence analyzed</p>
+          {item.evidence.map((source) => (
+            <a key={source.url} href={source.url} target="_blank" className="block rounded-lg border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] p-4 transition hover:border-[var(--tg-accent-line)]">
+              <div className="flex items-center justify-between gap-3">
+                <b className="truncate text-sm text-[var(--tg-text)]">{source.title || source.url}</b>
+                {source.reliability !== undefined ? (
+                  <span className="shrink-0 text-xs font-semibold text-[var(--tg-accent)]">{source.reliability}% reliable</span>
+                ) : null}
+              </div>
+              {source.excerpt ? <p className="mt-2 text-sm leading-6 text-[var(--tg-muted)]">{source.excerpt}</p> : null}
+            </a>
+          ))}
+        </div>
+      ) : null}
+
+      <button className="mt-5 flex w-full items-center justify-between border-t border-[var(--tg-line)] pt-4 text-xs font-semibold text-[var(--tg-muted)] transition hover:text-[var(--tg-text)]" onClick={() => setAdvanced(!advanced)}>
+        Raw contract response
+        <span className={`transition-transform ${advanced ? "rotate-180" : ""}`}>▾</span>
       </button>
-      {advanced ? <pre className="mt-4 max-h-80 overflow-auto rounded-lg bg-slate-950/75 p-4 text-xs text-cyan-50">{JSON.stringify(item, null, 2)}</pre> : null}
-    </Card>
+      {advanced ? <pre className="mt-4 max-h-80 overflow-auto rounded-xl border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] p-4 text-xs leading-5 text-[var(--tg-text-soft)]">{JSON.stringify(item, null, 2)}</pre> : null}
+    </div>
   );
 }
 
@@ -552,32 +613,41 @@ function HistoryPanel({ history, setHistory, setClaim, setResult }: {
   setResult: (item: VerificationResult) => void;
 }) {
   return (
-    <Card>
+    <div className="tg-card p-5">
       <div className="mb-4 flex items-center justify-between">
-        <p className="flex items-center gap-2 font-bold text-white"><History size={17} /> My Checks</p>
-        <IconButton label="Clear history" onClick={() => { setHistory([]); writeHistory([]); }}><Trash2 size={16} /></IconButton>
+        <p className="flex items-center gap-2 font-bold tracking-tight text-[var(--tg-text)]">
+          <History size={16} className="text-[var(--tg-accent)]" /> Recent checks
+        </p>
+        {history.length ? (
+          <IconButton label="Clear history" onClick={() => { setHistory([]); writeHistory([]); }}><Trash2 size={15} /></IconButton>
+        ) : null}
       </div>
       {history.length ? (
         <div className="space-y-2">
           {history.map((item) => (
-            <button key={item.id} onClick={() => { setResult(item); setClaim(item.claim); }} className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-left hover:bg-cyan-300/10">
-              <div className="flex justify-between text-xs"><b className={verdictClass(item.verdict)}>{label(item.verdict)}</b><span>{item.confidence !== undefined ? `${item.confidence}%` : "—"}</span></div>
-              <p className="mt-2 line-clamp-2 text-sm font-bold text-white">{item.claim}</p>
+            <button key={item.id} onClick={() => { setResult(item); setClaim(item.claim); }} className="w-full rounded-lg border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] p-3 text-left transition hover:border-[var(--tg-accent-line)]">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <b className={verdictTextClass(item.verdict)}>{label(item.verdict)}</b>
+                <span className="text-[var(--tg-muted)]">{item.confidence !== undefined ? `${item.confidence}%` : "—"}</span>
+              </div>
+              <p className="mt-1.5 line-clamp-2 text-sm font-medium text-[var(--tg-text)]">{item.claim}</p>
             </button>
           ))}
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-white/10 p-4 text-sm text-[var(--tg-muted)]">Recent verifications stay in localStorage on this device.</p>
+        <p className="rounded-lg border border-dashed border-[var(--tg-line)] p-4 text-sm leading-6 text-[var(--tg-muted)]">
+          Verifications you run are stored privately in this browser.
+        </p>
       )}
-    </Card>
+    </div>
   );
 }
 
 function UrlPreview({ url }: { url: string }) {
   const valid = isValidUrl(url);
   return (
-    <div className={`sm:col-span-2 rounded-md border px-3 py-2 text-xs ${valid ? "border-cyan-300/20 bg-cyan-300/10 text-cyan-100" : "border-rose-300/25 bg-rose-300/10 text-rose-100"}`}>
-      <Link2 className="mr-2 inline" size={14} />
+    <div className={`sm:col-span-2 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${valid ? "border-[var(--tg-accent-line)] bg-[var(--tg-accent-soft)] text-[var(--tg-accent)]" : "border-[var(--tg-false-soft)] bg-[var(--tg-false-soft)] text-[var(--tg-false)]"}`}>
+      <Link2 size={13} />
       {valid ? new URL(url).host : "Invalid URL"}
     </div>
   );
@@ -585,46 +655,59 @@ function UrlPreview({ url }: { url: string }) {
 
 function Progress({ step, status }: { step: number; status: string }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xl">
-      <Card className="w-full max-w-2xl">
-        <div className="flex gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-cyan-300/30 bg-cyan-300/10">
-            <Loader2 className="animate-spin text-cyan-100" size={26} />
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4 backdrop-blur-md">
+      <div className="tg-card w-full max-w-2xl animate-[modalIn_220ms_ease-out] p-6 sm:p-8">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--tg-accent-line)] bg-[var(--tg-accent-soft)]">
+            <Loader2 className="animate-spin text-[var(--tg-accent)]" size={24} />
           </div>
           <div>
-            <p className="text-sm font-bold uppercase tracking-[.22em] text-cyan-200">Verification in Progress</p>
-            <h2 className="mt-2 text-2xl font-black text-white">GenLayer validators are reaching consensus</h2>
-            <p className="mt-2 text-sm text-[var(--tg-muted)]">{status}</p>
+            <p className="tg-label">Verification in progress</p>
+            <h2 className="mt-1.5 text-xl font-bold tracking-tight text-[var(--tg-text)] sm:text-2xl">Validators are reaching consensus</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--tg-text-soft)]">{status}</p>
           </div>
         </div>
         <div className="mt-7 space-y-3">
           {verificationSteps.map((item, index) => (
-            <div key={item.title} className="flex gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md border border-cyan-300/25 text-cyan-100">
-                {index < step ? <Check size={16} /> : index + 1}
+            <div key={item.title} className={`flex items-start gap-3 rounded-xl border p-3.5 ${index <= step ? "border-[var(--tg-accent-line)] bg-[var(--tg-accent-soft)]" : "border-[var(--tg-line)] bg-[var(--tg-surface-raised)]"}`}>
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-sm font-bold ${index < step ? "border-[var(--tg-accent-line)] bg-[var(--tg-accent-soft)] text-[var(--tg-accent)]" : index === step ? "border-[var(--tg-accent-line)] bg-[var(--tg-accent)] text-[var(--tg-accent-ink)]" : "border-[var(--tg-line)] text-[var(--tg-muted)]"}`}>
+                {index < step ? <Check size={15} /> : index + 1}
               </div>
-              <div><p className="font-bold text-white">{item.title}</p><p className="text-sm text-[var(--tg-muted)]">{item.detail}</p></div>
+              <div>
+                <p className="font-semibold text-[var(--tg-text)]">{item.title}</p>
+                <p className="mt-0.5 text-sm leading-5 text-[var(--tg-muted)]">{item.detail}</p>
+              </div>
             </div>
           ))}
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
 
 function ToastView({ toast }: { toast: NonNullable<Toast> }) {
-  const tone = toast.tone === "bad" ? "border-rose-300/25 bg-rose-300/10" : toast.tone === "good" ? "border-emerald-300/25 bg-emerald-300/10" : "border-cyan-300/25 bg-cyan-300/10";
-  return <div className={`fixed right-4 top-4 z-50 rounded-lg border px-4 py-3 text-sm font-bold backdrop-blur ${tone}`}>{toast.text}</div>;
+  const tone = toast.tone === "bad"
+    ? "border-[var(--tg-false)]/40 bg-[var(--tg-false-soft)] text-[var(--tg-false)]"
+    : toast.tone === "good"
+      ? "border-[var(--tg-true)]/40 bg-[var(--tg-true-soft)] text-[var(--tg-true)]"
+      : "border-[var(--tg-accent-line)] bg-[var(--tg-accent-soft)] text-[var(--tg-accent)]";
+  return (
+    <div className={`fixed right-4 top-4 z-50 max-w-sm animate-[toastIn_200ms_ease-out] rounded-xl border px-4 py-3 text-sm font-semibold shadow-[var(--tg-shadow)] backdrop-blur-xl ${tone}`}>
+      {toast.text}
+    </div>
+  );
 }
 
 function WalletModal({ wallets, onClose, onSelect }: { wallets: WalletOption[]; onClose: () => void; onSelect: (wallet: WalletOption) => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-xl">
-      <Card className="w-full max-w-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-md">
+      <div className="tg-card w-full max-w-md animate-[modalIn_220ms_ease-out] p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-lg font-black text-white">Select Wallet</p>
-            <p className="mt-1 text-sm text-[var(--tg-muted)]">TruthGuard detected {wallets.length} available wallet{wallets.length === 1 ? "" : "s"}.</p>
+            <p className="text-lg font-bold tracking-tight text-[var(--tg-text)]">Connect a wallet</p>
+            <p className="mt-1 text-sm text-[var(--tg-muted)]">
+              {wallets.length} wallet{wallets.length === 1 ? "" : "s"} detected. Pick one to verify claims on Bradbury.
+            </p>
           </div>
           <IconButton label="Close wallet selector" onClick={onClose}><X size={16} /></IconButton>
         </div>
@@ -634,30 +717,30 @@ function WalletModal({ wallets, onClose, onSelect }: { wallets: WalletOption[]; 
               key={walletOption.id}
               type="button"
               onClick={() => onSelect(walletOption)}
-              className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 p-3 text-left transition hover:border-cyan-300/35 hover:bg-cyan-300/10"
+              className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] p-3.5 text-left transition hover:border-[var(--tg-accent-line)] hover:bg-[var(--tg-accent-soft)]"
             >
               <span className="flex min-w-0 items-center gap-3">
-                {walletOption.icon ? <img src={walletOption.icon} alt="" className="h-8 w-8 rounded-md" /> : <Wallet size={24} className="text-cyan-100" />}
-                <span>
-                  <span className="block font-bold text-white">{walletOption.name}</span>
-                  {walletOption.rdns ? <span className="block text-xs text-[var(--tg-muted)]">{walletOption.rdns}</span> : null}
+                {walletOption.icon ? <img src={walletOption.icon} alt="" className="h-8 w-8 rounded-lg" /> : <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--tg-accent-line)] bg-[var(--tg-accent-soft)] text-[var(--tg-accent)]"><Wallet size={17} /></span>}
+                <span className="min-w-0">
+                  <span className="block font-semibold text-[var(--tg-text)]">{walletOption.name}</span>
+                  {walletOption.rdns ? <span className="block truncate text-xs text-[var(--tg-muted)]">{walletOption.rdns}</span> : null}
                 </span>
               </span>
-              <ExternalLinkIcon size={15} className="shrink-0 text-[var(--tg-muted)]" />
+              <ArrowRight size={15} className="shrink-0 text-[var(--tg-muted)]" />
             </button>
           ))}
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
 
 function AuthorCorner() {
   return (
-    <div className="fixed bottom-3 right-3 z-20 rounded-md border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-[var(--tg-muted)] backdrop-blur-xl">
-      <span className="mr-2 text-white">onchaindc</span>
+    <div className="fixed bottom-3 right-3 z-20 hidden items-center gap-1 rounded-lg border border-[var(--tg-line)] bg-[var(--tg-surface)]/90 px-3 py-2 text-xs font-medium text-[var(--tg-muted)] shadow-[var(--tg-shadow)] backdrop-blur-xl sm:flex">
+      <span className="text-[var(--tg-text)]">onchaindc</span>
       {AUTHOR_LINKS.map((link) => (
-        <a key={link.label} href={link.href} target="_blank" rel="noreferrer" className="ml-2 hover:text-cyan-100">
+        <a key={link.label} href={link.href} target="_blank" rel="noreferrer" className="ml-2 transition hover:text-[var(--tg-accent)]">
           {link.label}
         </a>
       ))}
@@ -665,30 +748,28 @@ function AuthorCorner() {
   );
 }
 
-function Button({ children, big, variant = "primary", ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { big?: boolean; variant?: "primary" | "muted" }) {
-  const tone = variant === "muted" ? "bg-white/10 text-white hover:bg-white/15" : "bg-cyan-300 text-slate-950 hover:bg-cyan-200";
+function Button({ children, big, variant = "primary", ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { big?: boolean; variant?: "primary" | "ghost" }) {
+  const tone = variant === "ghost"
+    ? "border-[var(--tg-line)] bg-transparent text-[var(--tg-text-soft)] hover:border-[var(--tg-accent-line)] hover:text-[var(--tg-text)]"
+    : "border-transparent bg-[var(--tg-accent)] text-[var(--tg-accent-ink)] hover:opacity-90";
 
-  return <button {...props} className={`${big ? "min-h-12 px-5" : "min-h-10 px-4"} inline-flex items-center justify-center gap-2 rounded-md border border-white/10 text-sm font-bold disabled:opacity-45 ${tone} ${props.className || ""}`}>{children}</button>;
+  return <button {...props} className={`${big ? "min-h-12 px-5 text-[15px]" : "min-h-10 px-4 text-sm"} inline-flex items-center justify-center gap-2 rounded-xl border font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${tone} ${props.className || ""}`}>{children}</button>;
 }
 
 function IconButton({ children, label, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
-  return <button aria-label={label} title={label} {...props} className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-white/10 text-white hover:bg-white/15">{children}</button>;
-}
-
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-lg border border-white/10 bg-white/[.075] p-5 shadow-[0_24px_90px_rgba(0,0,0,.28)] backdrop-blur-xl ${className}`}>{children}</div>;
-}
-
-function Badge({ children }: { children: React.ReactNode }) {
-  return <span className="inline-flex min-h-7 items-center gap-1.5 rounded-md border border-cyan-300/25 bg-cyan-300/10 px-2.5 py-1 text-xs font-bold text-cyan-100">{children}</span>;
+  return <button aria-label={label} title={label} {...props} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--tg-line)] bg-transparent text-[var(--tg-text-soft)] transition hover:border-[var(--tg-accent-line)] hover:text-[var(--tg-text)]">{children}</button>;
 }
 
 function label(value: string) {
   return value === "true" ? "True" : value === "false" ? "False" : "Uncertain";
 }
 
-function verdictClass(value: string) {
-  return value === "true" ? "text-emerald-200" : value === "false" ? "text-rose-200" : "text-amber-200";
+function verdictTextClass(value: string) {
+  return value === "true" ? "text-[var(--tg-true)]" : value === "false" ? "text-[var(--tg-false)]" : "text-[var(--tg-uncertain)]";
+}
+
+function verdictBarClass(value: string) {
+  return value === "true" ? "bg-[var(--tg-true)]" : value === "false" ? "bg-[var(--tg-false)]" : "bg-[var(--tg-uncertain)]";
 }
 
 function readHistory() {
