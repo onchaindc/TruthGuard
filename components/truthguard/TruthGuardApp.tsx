@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -47,6 +47,8 @@ import {
   ensureBradburyNetwork,
   formatChainLabel,
   getLegacyInjectedWallets,
+  getWalletAccounts,
+  getWalletChainId,
   requestWalletAccounts,
   walletFromEip6963
 } from "@/lib/wallet";
@@ -89,6 +91,7 @@ export function TruthGuardApp() {
   const [advanced, setAdvanced] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
   const [rate, setRate] = useState(0);
+  const restoreTriedRef = useRef(false);
 
   const evidenceInvalid = evidenceUrl.trim().length > 0 && !isValidUrl(evidenceUrl.trim());
   const canVerify = claim.trim().length >= 12 && !evidenceInvalid && !busy;
@@ -109,16 +112,24 @@ export function TruthGuardApp() {
 
   useEffect(() => {
     const wallets = new Map<string, WalletOption>();
+    // Wallets usually announce through both EIP-6963 and the legacy
+    // window.ethereum path; key by name so they never show up twice.
+    const upsertWallet = (option: WalletOption) => {
+      const nameKey = option.name.toLowerCase();
+      for (const [key, existing] of wallets) {
+        if (existing.name.toLowerCase() === nameKey) wallets.delete(key);
+      }
+      wallets.set(option.rdns || nameKey, option);
+    };
     const syncWallets = () => setWalletOptions(Array.from(wallets.values()));
 
     for (const walletOption of getLegacyInjectedWallets()) {
-      wallets.set(walletOption.id, walletOption);
+      upsertWallet(walletOption);
     }
     syncWallets();
 
     const onAnnounce = (event: WindowEventMap["eip6963:announceProvider"]) => {
-      const walletOption = walletFromEip6963(event.detail);
-      wallets.set(walletOption.id, walletOption);
+      upsertWallet(walletFromEip6963(event.detail));
       syncWallets();
     };
 
@@ -182,7 +193,8 @@ export function TruthGuardApp() {
   }
 
   async function connectWallet() {
-    if (walletOptions.length === 0) return notify("No wallet found. Install a GenLayer-compatible browser wallet.", "bad");
+    // Open the modal even when no browser wallet is detected — the
+    // WalletConnect QR option covers that case.
     setWalletModalOpen(true);
   }
 
@@ -202,6 +214,60 @@ export function TruthGuardApp() {
       notify(`Connected ${walletOption.name}.`, "good");
     } catch (error) {
       notify(formatContractError(error), "bad");
+    }
+  }
+
+  useEffect(() => {
+    // Silently restore the last-used wallet after a refresh (no popups): the
+    // saved wallet id is matched against the discovered injected wallets, or
+    // the WalletConnect session is re-attached and queried via eth_accounts.
+    if (restoreTriedRef.current || walletProvider) return;
+    const savedId = localStorage.getItem(SELECTED_WALLET_KEY);
+    if (!savedId) {
+      restoreTriedRef.current = true;
+      return;
+    }
+
+    if (savedId === "walletconnect") {
+      restoreTriedRef.current = true;
+      void restoreWalletConnect();
+      return;
+    }
+
+    const saved = walletOptions.find((option) => option.id === savedId);
+    if (!saved) return; // wait for EIP-6963 announcements to settle
+    restoreTriedRef.current = true;
+    void restoreInjectedWallet(saved);
+  }, [walletOptions, walletProvider]);
+
+  async function restoreInjectedWallet(option: WalletOption) {
+    try {
+      const accounts = await getWalletAccounts(option.provider);
+      const address = accounts[0];
+      if (!address) return;
+      const nextChainId = await getWalletChainId(option.provider);
+      setWallet(address);
+      setWalletName(option.name);
+      setWalletProvider(option.provider);
+      setChainId(nextChainId);
+    } catch {
+      // Silent: leave the user disconnected, they can connect manually.
+    }
+  }
+
+  async function restoreWalletConnect() {
+    try {
+      const provider = await createWalletConnectProvider({ silent: true });
+      const accounts = await getWalletAccounts(provider);
+      const address = accounts[0];
+      if (!address) return;
+      const nextChainId = await getWalletChainId(provider);
+      setWallet(address);
+      setWalletName("WalletConnect");
+      setWalletProvider(provider);
+      setChainId(nextChainId);
+    } catch {
+      // No live session — leave disconnected.
     }
   }
 

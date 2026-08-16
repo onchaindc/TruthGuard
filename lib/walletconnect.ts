@@ -23,7 +23,10 @@ export function isWalletConnectConfigured() {
   return typeof window !== "undefined" && WALLETCONNECT_PROJECT_ID.length > 0;
 }
 
-export async function createWalletConnectProvider(): Promise<Eip1193Provider> {
+export async function createWalletConnectProvider(options: {
+  /** Restore an existing session without showing the QR modal. */
+  silent?: boolean;
+} = {}): Promise<Eip1193Provider> {
   if (!WALLETCONNECT_PROJECT_ID) {
     throw new Error(
       "WalletConnect is not configured yet. Add NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID (free from cloud.walletconnect.com) and redeploy."
@@ -43,7 +46,7 @@ export async function createWalletConnectProvider(): Promise<Eip1193Provider> {
       1: "https://ethereum-rpc.publicnode.com",
       [BRADBURY_CHAIN_ID_DECIMAL]: GENLAYER_RPC_URL
     },
-    showQrModal: true,
+    showQrModal: !options.silent,
     metadata: {
       name: "TruthGuard",
       description: "Decentralized AI fact-checking on GenLayer Bradbury Testnet",
