@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -57,7 +57,6 @@ import {
 } from "@/lib/walletconnect";
 import { truncateMiddle } from "@/lib/utils";
 
-type Evidence = { id: string; url: string };
 type Toast = { text: string; tone: "good" | "bad" | "info" } | null;
 
 const MAX = 700;
@@ -73,7 +72,7 @@ const AUTHOR_LINKS = [
 
 export function TruthGuardApp() {
   const [claim, setClaim] = useState("");
-  const [evidence, setEvidence] = useState<Evidence[]>([{ id: cryptoId(), url: "" }]);
+  const [evidenceUrl, setEvidenceUrl] = useState("");
   const [contractAddress, setContractAddress] = useState(DEFAULT_CONTRACT);
   const [wallet, setWallet] = useState("");
   const [walletName, setWalletName] = useState("");
@@ -91,13 +90,8 @@ export function TruthGuardApp() {
   const [toast, setToast] = useState<Toast>(null);
   const [rate, setRate] = useState(0);
 
-  const urls = useMemo(
-    () => evidence.map((item) => item.url.trim()).filter((url) => url && isValidUrl(url)),
-    [evidence]
-  );
-  const invalidUrls = evidence.filter((item) => item.url.trim() && !isValidUrl(item.url.trim())).length;
-  const canVerify = claim.trim().length >= 12 && invalidUrls === 0 && !busy;
-  const evidenceUrl = urls[0] || "";
+  const evidenceInvalid = evidenceUrl.trim().length > 0 && !isValidUrl(evidenceUrl.trim());
+  const canVerify = claim.trim().length >= 12 && !evidenceInvalid && !busy;
   const checksRemaining = Math.max(0, RATE_LIMIT - rate);
 
   useEffect(() => {
@@ -257,7 +251,7 @@ export function TruthGuardApp() {
   async function verify() {
     if (!claim.trim()) return notify("Add a claim first.", "bad");
     if (claim.trim().length < 12) return notify("Use a more specific claim.", "bad");
-    if (invalidUrls) return notify("Fix invalid evidence URLs first.", "bad");
+    if (evidenceInvalid) return notify("Fix the evidence URL first.", "bad");
     if (!wallet || !walletProvider) return notify("Connect your wallet before verifying a claim.", "bad");
     if (readRate() >= RATE_LIMIT) return notify("Rate limit reached for this hour.", "bad");
 
@@ -436,24 +430,17 @@ const contractResult = await waitForContractResult({
                 <span className="tg-chip">Optional</span>
               </div>
 
-              <div className="mt-3 space-y-3">
-                {evidence.map((item, index) => (
-                  <div key={item.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_2.75rem]">
-                    <input
-                      className="h-11 w-full rounded-xl border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] px-3.5 text-sm text-[var(--tg-text)] outline-none transition placeholder:text-[var(--tg-muted)] focus:border-[var(--tg-accent-line)]"
-                      value={item.url}
-                      onChange={(event) => setEvidence((items) => items.map((x) => (x.id === item.id ? { ...x, url: event.target.value } : x)))}
-                      placeholder={index === 0 ? "https://source.example/article" : "Add another source URL"}
-                    />
-                    <IconButton
-                      label="Remove"
-                      onClick={() => setEvidence((items) => (items.length === 1 ? [{ id: cryptoId(), url: "" }] : items.filter((x) => x.id !== item.id)))}
-                    >
-                      <X size={16} />
-                    </IconButton>
-                    {item.url.trim() ? <UrlPreview url={item.url.trim()} /> : null}
-                  </div>
-                ))}
+              <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_2.75rem]">
+                <input
+                  className="h-11 w-full rounded-xl border border-[var(--tg-line)] bg-[var(--tg-surface-raised)] px-3.5 text-sm text-[var(--tg-text)] outline-none transition placeholder:text-[var(--tg-muted)] focus:border-[var(--tg-accent-line)]"
+                  value={evidenceUrl}
+                  onChange={(event) => setEvidenceUrl(event.target.value)}
+                  placeholder="https://source.example/article"
+                />
+                <IconButton label="Clear" onClick={() => setEvidenceUrl("")}>
+                  <X size={16} />
+                </IconButton>
+                {evidenceUrl.trim() ? <UrlPreview url={evidenceUrl.trim()} /> : null}
               </div>
 
               <div className="mt-6 border-t border-[var(--tg-line)] pt-5">
@@ -486,7 +473,7 @@ const contractResult = await waitForContractResult({
             {result ? (
               <Result item={result} advanced={advanced} setAdvanced={setAdvanced} copy={copy} share={share} reset={() => {
                 setClaim("");
-                setEvidence([{ id: cryptoId(), url: "" }]);
+                setEvidenceUrl("");
                 setResult(null);
               }} />
             ) : (
@@ -940,10 +927,6 @@ async function waitForContractResult({
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function cryptoId() {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2);
 }
 
 function confetti(colors: string[]) {

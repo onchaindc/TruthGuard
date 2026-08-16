@@ -22,8 +22,8 @@ removed:
   `gl.eq_principle.prompt_comparative` so validators must agree before anything is
   stored.
 - **Everything displayed comes from `get_last_result()`** — verdict, confidence,
-  reasoning, evidence title/excerpt/reliability, requester, and timestamp are all
-  on-chain fields. No fabricated numbers remain.
+  reasoning, evidence title/excerpt/reliability, requester, and block number are
+  all on-chain fields. No fabricated numbers remain.
 - **Honest fallback** — if the app is pointed at an older FactChecker deployment
   (which returns only `[claim, verdict, reason]`), it shows exactly that and labels
   confidence/evidence analysis as "not recorded" instead of inventing values.

@@ -71,7 +71,8 @@ export type FactCheckerResult = {
   evidenceReliability?: number;
   evidenceLoaded?: boolean;
   requester?: string;
-  verifiedAt?: string;
+  /** Block number the contract recorded the agreed result on. */
+  verifiedBlock?: string;
   checksCount?: number;
 };
 
@@ -272,7 +273,7 @@ function normalizeFactCheckerResult(result: unknown): FactCheckerResult {
         evidenceLoaded === true ||
         (typeof evidenceLoaded === "string" && evidenceLoaded.toLowerCase() === "true"),
       requester: optionalString(record.requester),
-      verifiedAt: optionalString(record.verified_at),
+      verifiedBlock: optionalString(record.verified_block),
       checksCount: optionalNumber(record.checks_count)
     };
   }

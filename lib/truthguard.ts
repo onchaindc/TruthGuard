@@ -21,7 +21,8 @@ export type VerificationResult = {
   /** True when the contract actually fetched and analyzed the evidence URL. */
   evidenceLoaded?: boolean;
   requester?: string;
-  verifiedAt?: string;
+  /** Bradbury block number the consensus result was recorded on. */
+  verifiedBlock?: string;
   checksCount?: number;
   completedAt: string;
   txHash: string;
@@ -67,8 +68,8 @@ export function genlayerExplorerTxUrl(txHash: string) {
 
 /**
  * Build the display result strictly from what the contract returned.
- * Nothing here is guessed: confidence, evidence analysis, and timestamps come
- * from `get_last_result()`. Legacy contracts that only return
+ * Nothing here is guessed: confidence, evidence analysis, and the recorded
+ * block number come from `get_last_result()`. Legacy contracts that only return
  * [claim, verdict, reason] leave the richer fields undefined, and the UI shows
  * them as "not recorded on-chain" instead of inventing numbers.
  */
@@ -116,9 +117,9 @@ export function createVerificationResult({
     evidence,
     evidenceLoaded: contractResult.evidenceLoaded,
     requester: contractResult.requester,
-    verifiedAt: contractResult.verifiedAt,
+    verifiedBlock: contractResult.verifiedBlock,
     checksCount: contractResult.checksCount,
-    completedAt: contractResult.verifiedAt || new Date().toISOString(),
+    completedAt: contractResult.verifiedBlock || new Date().toISOString(),
     txHash,
     contractAddress,
     raw: {

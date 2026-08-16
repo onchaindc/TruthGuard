@@ -19,7 +19,8 @@ on-chain:
    transaction can be finalized. If validators disagree, the transaction fails and
    nothing is recorded.
 4. **On-chain storage** — only the agreed result is stored: verdict, confidence,
-   reasoning, evidence title/excerpt/reliability, requester, and timestamp.
+   reasoning, evidence title/excerpt/reliability, requester, and the Bradbury
+   block number.
 
 The frontend reads everything back via `get_last_result()` — nothing is invented.
 
@@ -45,7 +46,7 @@ The frontend reads everything back via `get_last_result()` — nothing is invent
   "evidence_reliability": 0,
   "evidence_loaded": "true | false",
   "requester": "0x...",
-  "verified_at": "ISO 8601",
+  "verified_block": "string (Bradbury block number)",
   "checks_count": 0
 }
 ```
